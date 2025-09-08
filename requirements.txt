@@ -1,0 +1,12 @@
+# Task Timer Manager - Python Dependencies
+# This application uses only Python standard library modules
+# No external dependencies required
+
+# Standard library modules used:
+# - json (for data persistence)
+# - os (for file operations)
+# - datetime (for date/time handling)
+# - typing (for type hints)
+# - sys (for system operations)
+
+# Python version requirement: 3.6+
