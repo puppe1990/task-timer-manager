@@ -85,6 +85,14 @@ class Task:
             return self.actual_hours + (current_elapsed / 3600.0)
         return self.actual_hours
     
+    def format_time(self, hours: float) -> str:
+        """Format hours as hh:mm:ss."""
+        total_seconds = int(hours * 3600)
+        hours_part = total_seconds // 3600
+        minutes_part = (total_seconds % 3600) // 60
+        seconds_part = total_seconds % 60
+        return f"{hours_part:02d}:{minutes_part:02d}:{seconds_part:02d}"
+    
     def update_status(self, status: str) -> None:
         """Update the task status."""
         valid_statuses = ["Not Started", "In Progress", "Completed", "On Hold"]
@@ -159,9 +167,11 @@ class Task:
         timer_indicator = " [TIMER RUNNING]" if self.timer_running else ""
         progress = self.get_progress_percentage()
         total_time = self.get_total_time()
+        estimated_time_str = self.format_time(self.estimated_hours) if self.estimated_hours > 0 else "00:00:00"
+        actual_time_str = self.format_time(total_time)
         return f"[{self.id}] {self.title} - {self.status}{overdue_indicator}{timer_indicator}\n" \
                f"  Project: {self.project} | Category: {self.category}\n" \
-               f"  Estimated: {self.estimated_hours}h | Actual: {total_time:.2f}h | Progress: {progress:.1f}%\n" \
+               f"  Estimated: {estimated_time_str} | Actual: {actual_time_str} | Progress: {progress:.1f}%\n" \
                f"  Deadline: {self.deadline or 'No deadline'}\n" \
                f"  Description: {self.description}"
 
@@ -306,14 +316,15 @@ def main():
         print("7. Stop Timer")
         print("8. Restart Timer")
         print("9. View Running Timers")
-        print("10. View Tasks by Project")
-        print("11. View Tasks by Category")
-        print("12. View Tasks by Status")
-        print("13. View Overdue Tasks")
-        print("14. View Statistics")
-        print("15. Exit")
+        print("10. Live Timer Display")
+        print("11. View Tasks by Project")
+        print("12. View Tasks by Category")
+        print("13. View Tasks by Status")
+        print("14. View Overdue Tasks")
+        print("15. View Statistics")
+        print("16. Exit")
         
-        choice = input("\nEnter your choice (1-15): ").strip()
+        choice = input("\nEnter your choice (1-16): ").strip()
         
         if choice == '1':
             view_all_tasks(task_manager)
@@ -334,16 +345,18 @@ def main():
         elif choice == '9':
             view_running_timers(task_manager)
         elif choice == '10':
-            view_tasks_by_project(task_manager)
+            live_timer_display(task_manager)
         elif choice == '11':
-            view_tasks_by_category(task_manager)
+            view_tasks_by_project(task_manager)
         elif choice == '12':
-            view_tasks_by_status(task_manager)
+            view_tasks_by_category(task_manager)
         elif choice == '13':
-            view_overdue_tasks(task_manager)
+            view_tasks_by_status(task_manager)
         elif choice == '14':
-            view_statistics(task_manager)
+            view_overdue_tasks(task_manager)
         elif choice == '15':
+            view_statistics(task_manager)
+        elif choice == '16':
             print("\nThank you for using Task Timer Manager!")
             break
         else:
@@ -644,8 +657,12 @@ def view_statistics(task_manager: TaskManager) -> None:
     print(f"Overdue Tasks: {stats['overdue_tasks']}")
     print(f"Running Timers: {stats['running_timers']}")
     print(f"Completion Rate: {stats['completion_rate']:.1f}%")
-    print(f"Total Estimated Hours: {stats['total_estimated_hours']:.1f}")
-    print(f"Total Actual Hours: {stats['total_actual_hours']:.1f}")
+    # Create a dummy task to use the format_time method
+    dummy_task = Task("dummy", "", "", "", 0)
+    estimated_str = dummy_task.format_time(stats['total_estimated_hours'])
+    actual_str = dummy_task.format_time(stats['total_actual_hours'])
+    print(f"Total Estimated Time: {estimated_str}")
+    print(f"Total Actual Time: {actual_str}")
     
     if stats['total_estimated_hours'] > 0:
         efficiency = (stats['total_actual_hours'] / stats['total_estimated_hours']) * 100
@@ -659,9 +676,11 @@ def view_statistics(task_manager: TaskManager) -> None:
             project_tasks = task_manager.get_tasks_by_project(project)
             completed = len([t for t in project_tasks if t.status == "Completed"])
             total_estimated = sum(t.estimated_hours for t in project_tasks)
-            total_actual = sum(t.actual_hours for t in project_tasks)
+            total_actual = sum(t.get_total_time() for t in project_tasks)
             completion_rate = (completed / len(project_tasks) * 100) if project_tasks else 0
-            print(f"  {project}: {len(project_tasks)} tasks, {completed} completed ({completion_rate:.1f}%), {total_estimated:.1f}h estimated, {total_actual:.1f}h actual")
+            estimated_str = dummy_task.format_time(total_estimated)
+            actual_str = dummy_task.format_time(total_actual)
+            print(f"  {project}: {len(project_tasks)} tasks, {completed} completed ({completion_rate:.1f}%), {estimated_str} estimated, {actual_str} actual")
 
 
 def start_timer(task_manager: TaskManager) -> None:
@@ -718,7 +737,8 @@ def stop_timer(task_manager: TaskManager) -> None:
     print("Running timers:")
     for i, task in enumerate(running_timers, 1):
         current_time = task.get_current_session_time()
-        print(f"{i}. [{task.id}] {task.title} - {current_time:.2f}h")
+        current_time_str = task.format_time(current_time)
+        print(f"{i}. [{task.id}] {task.title} - {current_time_str}")
     
     try:
         timer_index = int(input("\nEnter timer number to stop: ")) - 1
@@ -726,9 +746,11 @@ def stop_timer(task_manager: TaskManager) -> None:
             task = running_timers[timer_index]
             elapsed = task.stop_timer()
             task_manager.save_tasks()
+            elapsed_str = task.format_time(elapsed)
+            total_str = task.format_time(task.actual_hours)
             print(f"\nTimer stopped for '{task.title}'")
-            print(f"Session time: {elapsed:.2f} hours")
-            print(f"Total time: {task.actual_hours:.2f} hours")
+            print(f"Session time: {elapsed_str}")
+            print(f"Total time: {total_str}")
         else:
             print("Invalid timer number.")
     except ValueError:
@@ -736,31 +758,46 @@ def stop_timer(task_manager: TaskManager) -> None:
 
 
 def restart_timer(task_manager: TaskManager) -> None:
-    """Restart a timer for a task."""
-    running_timers = task_manager.get_running_timers()
-    if not running_timers:
-        print("\nNo timers are currently running.")
+    """Restart a timer for a task (reset to zero and start new timer)."""
+    if not task_manager.tasks:
+        print("\nNo tasks found.")
         return
     
     print("\n" + "="*40)
     print("RESTART TIMER")
     print("="*40)
-    print("Running timers:")
-    for i, task in enumerate(running_timers, 1):
-        current_time = task.get_current_session_time()
-        print(f"{i}. [{task.id}] {task.title} - {current_time:.2f}h")
+    print("Available tasks:")
+    for i, task in enumerate(task_manager.tasks, 1):
+        status_indicator = " [TIMER RUNNING]" if task.timer_running else ""
+        total_time_str = task.format_time(task.get_total_time())
+        print(f"{i}. [{task.id}] {task.title}{status_indicator} - Total: {total_time_str}")
     
     try:
-        timer_index = int(input("\nEnter timer number to restart: ")) - 1
-        if 0 <= timer_index < len(running_timers):
-            task = running_timers[timer_index]
-            elapsed = task.restart_timer()
+        task_index = int(input("\nEnter task number to restart timer: ")) - 1
+        if 0 <= task_index < len(task_manager.tasks):
+            task = task_manager.tasks[task_index]
+            
+            # Stop any running timer first
+            if task.timer_running:
+                elapsed = task.stop_timer()
+                elapsed_str = task.format_time(elapsed)
+                print(f"Stopped previous timer: {elapsed_str}")
+            
+            # Reset timer data to zero
+            task.session_time = 0.0
+            task.actual_hours = 0.0
+            task.timer_start_time = None
+            task.timer_running = False
+            
+            # Start new timer
+            task.start_timer()
             task_manager.save_tasks()
+            
             print(f"\nTimer restarted for '{task.title}'")
-            print(f"Previous session: {elapsed:.2f} hours")
-            print(f"New session started at {datetime.now().strftime('%H:%M:%S')}")
+            print("Previous time reset to zero")
+            print(f"New timer started at {datetime.now().strftime('%H:%M:%S')}")
         else:
-            print("Invalid timer number.")
+            print("Invalid task number.")
     except ValueError:
         print("Invalid input. Please enter a number.")
 
@@ -778,11 +815,71 @@ def view_running_timers(task_manager: TaskManager) -> None:
         for task in running_timers:
             current_time = task.get_current_session_time()
             total_time = task.get_total_time()
+            current_time_str = task.format_time(current_time)
+            total_time_str = task.format_time(total_time)
             print(f"\n{task}")
-            print(f"  Current Session: {current_time:.2f}h")
-            print(f"  Total Time: {total_time:.2f}h")
+            print(f"  Current Session: {current_time_str}")
+            print(f"  Total Time: {total_time_str}")
     else:
         print("No timers are currently running.")
+
+
+def live_timer_display(task_manager: TaskManager) -> None:
+    """Display real-time timer updates for running tasks."""
+    running_timers = task_manager.get_running_timers()
+    
+    if not running_timers:
+        print("\nNo timers are currently running.")
+        print("Start a timer first to use the live display.")
+        return
+    
+    print("\n" + "="*60)
+    print("LIVE TIMER DISPLAY")
+    print("="*60)
+    print("Press Ctrl+C to return to main menu")
+    print("="*60)
+    
+    try:
+        while True:
+            # Clear screen (works on most terminals)
+            os.system('clear' if os.name == 'posix' else 'cls')
+            
+            print("="*60)
+            print("LIVE TIMER DISPLAY")
+            print("="*60)
+            print(f"Current Time: {datetime.now().strftime('%H:%M:%S')}")
+            print("Press Ctrl+C to return to main menu")
+            print("="*60)
+            
+            # Check if any timers are still running
+            running_timers = task_manager.get_running_timers()
+            if not running_timers:
+                print("\nNo timers are currently running.")
+                print("Returning to main menu...")
+                break
+            
+            for i, task in enumerate(running_timers, 1):
+                current_time = task.get_current_session_time()
+                total_time = task.get_total_time()
+                current_time_str = task.format_time(current_time)
+                total_time_str = task.format_time(total_time)
+                
+                print(f"\n{i}. {task.title}")
+                print(f"   Project: {task.project} | Category: {task.category}")
+                print(f"   Current Session: {current_time_str}")
+                print(f"   Total Time: {total_time_str}")
+                print(f"   Status: {task.status}")
+                if task.estimated_hours > 0:
+                    progress = task.get_progress_percentage()
+                    print(f"   Progress: {progress:.1f}%")
+                print("-" * 40)
+            
+            # Update every second
+            time.sleep(1)
+            
+    except KeyboardInterrupt:
+        print("\n\nReturning to main menu...")
+        time.sleep(1)
 
 
 if __name__ == "__main__":
