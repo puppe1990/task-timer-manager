@@ -16,7 +16,8 @@ class Task:
     """Represents a single task with time tracking capabilities."""
     
     def __init__(self, title: str, description: str = "", project: str = "General", 
-                 category: str = "General", estimated_hours: float = 0.0, deadline: Optional[str] = None):
+                 category: str = "General", estimated_hours: float = 0.0, deadline: Optional[str] = None,
+                 hourly_rate: float = 0.0):
         self.id = self._generate_id()
         self.title = title
         self.description = description
@@ -25,6 +26,7 @@ class Task:
         self.estimated_hours = estimated_hours
         self.actual_hours = 0.0
         self.deadline = deadline
+        self.hourly_rate = hourly_rate
         self.created_at = datetime.now().isoformat()
         self.updated_at = datetime.now().isoformat()
         self.status = "Not Started"  # Not Started, In Progress, Completed, On Hold
@@ -85,6 +87,15 @@ class Task:
             return self.actual_hours + (current_elapsed / 3600.0)
         return self.actual_hours
     
+    def get_current_value(self) -> float:
+        """Calculate current value based on time spent and hourly rate."""
+        total_time = self.get_total_time()
+        return total_time * self.hourly_rate
+    
+    def get_estimated_value(self) -> float:
+        """Calculate estimated value based on estimated hours and hourly rate."""
+        return self.estimated_hours * self.hourly_rate
+    
     def format_time(self, hours: float) -> str:
         """Format hours as hh:mm:ss."""
         total_seconds = int(hours * 3600)
@@ -130,6 +141,7 @@ class Task:
             'estimated_hours': self.estimated_hours,
             'actual_hours': self.actual_hours,
             'deadline': self.deadline,
+            'hourly_rate': self.hourly_rate,
             'created_at': self.created_at,
             'updated_at': self.updated_at,
             'status': self.status,
@@ -147,7 +159,8 @@ class Task:
             project=data.get('project', 'General'),
             category=data.get('category', 'General'),
             estimated_hours=data.get('estimated_hours', 0.0),
-            deadline=data.get('deadline')
+            deadline=data.get('deadline'),
+            hourly_rate=data.get('hourly_rate', 0.0)
         )
         task.id = data['id']
         task.actual_hours = data.get('actual_hours', 0.0)
@@ -169,9 +182,17 @@ class Task:
         total_time = self.get_total_time()
         estimated_time_str = self.format_time(self.estimated_hours) if self.estimated_hours > 0 else "00:00:00"
         actual_time_str = self.format_time(total_time)
+        
+        # Value information
+        value_info = ""
+        if self.hourly_rate > 0:
+            current_value = self.get_current_value()
+            estimated_value = self.get_estimated_value()
+            value_info = f"\n  Rate: ${self.hourly_rate:.2f}/h | Current Value: ${current_value:.2f} | Estimated Value: ${estimated_value:.2f}"
+        
         return f"[{self.id}] {self.title} - {self.status}{overdue_indicator}{timer_indicator}\n" \
                f"  Project: {self.project} | Category: {self.category}\n" \
-               f"  Estimated: {estimated_time_str} | Actual: {actual_time_str} | Progress: {progress:.1f}%\n" \
+               f"  Estimated: {estimated_time_str} | Actual: {actual_time_str} | Progress: {progress:.1f}%{value_info}\n" \
                f"  Deadline: {self.deadline or 'No deadline'}\n" \
                f"  Description: {self.description}"
 
@@ -275,6 +296,18 @@ class TaskManager:
                 task.stop_timer()
         self.save_tasks()
     
+    def get_total_value(self) -> float:
+        """Get total current value of all tasks."""
+        return sum(task.get_current_value() for task in self.tasks)
+    
+    def get_estimated_total_value(self) -> float:
+        """Get total estimated value of all tasks."""
+        return sum(task.get_estimated_value() for task in self.tasks)
+    
+    def get_tasks_with_rates(self) -> List[Task]:
+        """Get all tasks that have hourly rates set."""
+        return [task for task in self.tasks if task.hourly_rate > 0]
+    
     def get_statistics(self) -> Dict:
         """Get task statistics."""
         total_tasks = len(self.tasks)
@@ -283,6 +316,9 @@ class TaskManager:
         running_timers = len(self.get_running_timers())
         total_estimated_hours = sum(task.estimated_hours for task in self.tasks)
         total_actual_hours = sum(task.get_total_time() for task in self.tasks)
+        total_current_value = self.get_total_value()
+        total_estimated_value = self.get_estimated_total_value()
+        tasks_with_rates = len(self.get_tasks_with_rates())
         
         return {
             'total_tasks': total_tasks,
@@ -291,6 +327,9 @@ class TaskManager:
             'running_timers': running_timers,
             'total_estimated_hours': total_estimated_hours,
             'total_actual_hours': total_actual_hours,
+            'total_current_value': total_current_value,
+            'total_estimated_value': total_estimated_value,
+            'tasks_with_rates': tasks_with_rates,
             'completion_rate': (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
         }
 
@@ -317,14 +356,15 @@ def main():
         print("8. Restart Timer")
         print("9. View Running Timers")
         print("10. Live Timer Display")
-        print("11. View Tasks by Project")
-        print("12. View Tasks by Category")
-        print("13. View Tasks by Status")
-        print("14. View Overdue Tasks")
-        print("15. View Statistics")
-        print("16. Exit")
+        print("11. Set Hourly Rate")
+        print("12. View Tasks by Project")
+        print("13. View Tasks by Category")
+        print("14. View Tasks by Status")
+        print("15. View Overdue Tasks")
+        print("16. View Statistics")
+        print("17. Exit")
         
-        choice = input("\nEnter your choice (1-16): ").strip()
+        choice = input("\nEnter your choice (1-17): ").strip()
         
         if choice == '1':
             view_all_tasks(task_manager)
@@ -347,16 +387,18 @@ def main():
         elif choice == '10':
             live_timer_display(task_manager)
         elif choice == '11':
-            view_tasks_by_project(task_manager)
+            set_hourly_rate(task_manager)
         elif choice == '12':
-            view_tasks_by_category(task_manager)
+            view_tasks_by_project(task_manager)
         elif choice == '13':
-            view_tasks_by_status(task_manager)
+            view_tasks_by_category(task_manager)
         elif choice == '14':
-            view_overdue_tasks(task_manager)
+            view_tasks_by_status(task_manager)
         elif choice == '15':
-            view_statistics(task_manager)
+            view_overdue_tasks(task_manager)
         elif choice == '16':
+            view_statistics(task_manager)
+        elif choice == '17':
             print("\nThank you for using Task Timer Manager!")
             break
         else:
@@ -398,6 +440,12 @@ def add_new_task(task_manager: TaskManager) -> None:
         print("Invalid hours format. Using 0 hours.")
         estimated_hours = 0.0
     
+    try:
+        hourly_rate = float(input("Enter hourly rate (optional, $0.00): ") or "0")
+    except ValueError:
+        print("Invalid rate format. Using $0.00.")
+        hourly_rate = 0.0
+    
     deadline = input("Enter deadline (YYYY-MM-DD, optional): ").strip()
     if deadline:
         try:
@@ -406,9 +454,11 @@ def add_new_task(task_manager: TaskManager) -> None:
             print("Invalid date format. Ignoring deadline.")
             deadline = None
     
-    task = Task(title, description, project, category, estimated_hours, deadline)
+    task = Task(title, description, project, category, estimated_hours, deadline, hourly_rate)
     task_manager.add_task(task)
     print(f"\nTask '{title}' added successfully to project '{project}' with ID: {task.id}")
+    if hourly_rate > 0:
+        print(f"Hourly rate set to ${hourly_rate:.2f}/hour")
 
 
 def update_task(task_manager: TaskManager) -> None:
@@ -467,6 +517,13 @@ def update_task(task_manager: TaskManager) -> None:
                     task.deadline = new_deadline
                 except ValueError:
                     print("Invalid date format. Keeping current deadline.")
+            
+            new_hourly_rate = input(f"Enter new hourly rate (current: ${task.hourly_rate:.2f}): ").strip()
+            if new_hourly_rate:
+                try:
+                    task.hourly_rate = float(new_hourly_rate)
+                except ValueError:
+                    print("Invalid rate format. Keeping current rate.")
             
             task_manager.save_tasks()
             print("Task updated successfully!")
@@ -664,6 +721,15 @@ def view_statistics(task_manager: TaskManager) -> None:
     print(f"Total Estimated Time: {estimated_str}")
     print(f"Total Actual Time: {actual_str}")
     
+    # Show value information
+    if stats['tasks_with_rates'] > 0:
+        current_value_str = f"${stats['total_current_value']:.2f}"
+        estimated_value_str = f"${stats['total_estimated_value']:.2f}"
+        print(f"\nValue Information:")
+        print(f"Tasks with Rates: {stats['tasks_with_rates']}")
+        print(f"Total Current Value: {current_value_str}")
+        print(f"Total Estimated Value: {estimated_value_str}")
+    
     if stats['total_estimated_hours'] > 0:
         efficiency = (stats['total_actual_hours'] / stats['total_estimated_hours']) * 100
         print(f"Time Efficiency: {efficiency:.1f}%")
@@ -677,10 +743,12 @@ def view_statistics(task_manager: TaskManager) -> None:
             completed = len([t for t in project_tasks if t.status == "Completed"])
             total_estimated = sum(t.estimated_hours for t in project_tasks)
             total_actual = sum(t.get_total_time() for t in project_tasks)
+            total_value = sum(t.get_current_value() for t in project_tasks)
             completion_rate = (completed / len(project_tasks) * 100) if project_tasks else 0
             estimated_str = dummy_task.format_time(total_estimated)
             actual_str = dummy_task.format_time(total_actual)
-            print(f"  {project}: {len(project_tasks)} tasks, {completed} completed ({completion_rate:.1f}%), {estimated_str} estimated, {actual_str} actual")
+            value_str = f"${total_value:.2f}" if total_value > 0 else "No rates set"
+            print(f"  {project}: {len(project_tasks)} tasks, {completed} completed ({completion_rate:.1f}%), {estimated_str} estimated, {actual_str} actual, {value_str} value")
 
 
 def start_timer(task_manager: TaskManager) -> None:
@@ -824,6 +892,50 @@ def view_running_timers(task_manager: TaskManager) -> None:
         print("No timers are currently running.")
 
 
+def set_hourly_rate(task_manager: TaskManager) -> None:
+    """Set hourly rate for a task."""
+    if not task_manager.tasks:
+        print("\nNo tasks found.")
+        return
+    
+    print("\n" + "="*40)
+    print("SET HOURLY RATE")
+    print("="*40)
+    print("Available tasks:")
+    for i, task in enumerate(task_manager.tasks, 1):
+        rate_info = f" (Rate: ${task.hourly_rate:.2f}/h)" if task.hourly_rate > 0 else " (No rate set)"
+        print(f"{i}. [{task.id}] {task.title}{rate_info}")
+    
+    try:
+        task_index = int(input("\nEnter task number: ")) - 1
+        if 0 <= task_index < len(task_manager.tasks):
+            task = task_manager.tasks[task_index]
+            print(f"\nSetting hourly rate for: {task.title}")
+            print(f"Current rate: ${task.hourly_rate:.2f}/hour")
+            
+            try:
+                new_rate = float(input("Enter new hourly rate ($0.00): "))
+                if new_rate >= 0:
+                    task.hourly_rate = new_rate
+                    task_manager.save_tasks()
+                    if new_rate > 0:
+                        current_value = task.get_current_value()
+                        estimated_value = task.get_estimated_value()
+                        print(f"\nHourly rate set to ${new_rate:.2f}/hour")
+                        print(f"Current value: ${current_value:.2f}")
+                        print(f"Estimated value: ${estimated_value:.2f}")
+                    else:
+                        print("Hourly rate cleared (set to $0.00)")
+                else:
+                    print("Invalid rate. Rate must be 0 or positive.")
+            except ValueError:
+                print("Invalid rate format. Please enter a number.")
+        else:
+            print("Invalid task number.")
+    except ValueError:
+        print("Invalid input. Please enter a number.")
+
+
 def live_timer_display(task_manager: TaskManager) -> None:
     """Display real-time timer updates for running tasks."""
     running_timers = task_manager.get_running_timers()
@@ -869,6 +981,9 @@ def live_timer_display(task_manager: TaskManager) -> None:
                 print(f"   Current Session: {current_time_str}")
                 print(f"   Total Time: {total_time_str}")
                 print(f"   Status: {task.status}")
+                if task.hourly_rate > 0:
+                    current_value = task.get_current_value()
+                    print(f"   Current Value: ${current_value:.2f}")
                 if task.estimated_hours > 0:
                     progress = task.get_progress_percentage()
                     print(f"   Progress: {progress:.1f}%")
