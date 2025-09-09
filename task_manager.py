@@ -937,16 +937,38 @@ def set_hourly_rate(task_manager: TaskManager) -> None:
 
 
 def live_timer_display(task_manager: TaskManager) -> None:
-    """Display real-time timer updates for running tasks."""
-    running_timers = task_manager.get_running_timers()
-    
-    if not running_timers:
-        print("\nNo timers are currently running.")
-        print("Start a timer first to use the live display.")
-        return
-    
+    """Display real-time timer updates for running tasks with interactive controls."""
     print("\n" + "="*60)
     print("LIVE TIMER DISPLAY")
+    print("="*60)
+    print("Choose display mode:")
+    print("1. Live Display (real-time updates)")
+    print("2. Interactive Menu")
+    print("3. Return to Main Menu")
+    print("="*60)
+    
+    try:
+        choice = input("\nEnter your choice (1-3): ").strip()
+        
+        if choice == '1':
+            live_display_mode(task_manager)
+        elif choice == '2':
+            interactive_menu_mode(task_manager)
+        elif choice == '3':
+            print("\nReturning to main menu...")
+            return
+        else:
+            print("Invalid choice. Returning to main menu...")
+            
+    except KeyboardInterrupt:
+        print("\n\nReturning to main menu...")
+        time.sleep(1)
+
+
+def live_display_mode(task_manager: TaskManager) -> None:
+    """Pure live display mode with real-time updates."""
+    print("\n" + "="*60)
+    print("LIVE TIMER DISPLAY - LIVE MODE")
     print("="*60)
     print("Press Ctrl+C to return to main menu")
     print("="*60)
@@ -957,18 +979,67 @@ def live_timer_display(task_manager: TaskManager) -> None:
             os.system('clear' if os.name == 'posix' else 'cls')
             
             print("="*60)
-            print("LIVE TIMER DISPLAY")
+            print("LIVE TIMER DISPLAY - LIVE MODE")
             print("="*60)
             print(f"Current Time: {datetime.now().strftime('%H:%M:%S')}")
             print("Press Ctrl+C to return to main menu")
             print("="*60)
             
-            # Check if any timers are still running
+            # Check for running timers
             running_timers = task_manager.get_running_timers()
-            if not running_timers:
+            
+            if running_timers:
+                print(f"\nRUNNING TIMERS ({len(running_timers)} active):")
+                print("-" * 40)
+                
+                for i, task in enumerate(running_timers, 1):
+                    current_time = task.get_current_session_time()
+                    total_time = task.get_total_time()
+                    current_time_str = task.format_time(current_time)
+                    total_time_str = task.format_time(total_time)
+                    
+                    print(f"\n{i}. {task.title}")
+                    print(f"   Project: {task.project} | Category: {task.category}")
+                    print(f"   Current Session: {current_time_str}")
+                    print(f"   Total Time: {total_time_str}")
+                    print(f"   Status: {task.status}")
+                    if task.hourly_rate > 0:
+                        current_value = task.get_current_value()
+                        print(f"   Current Value: ${current_value:.2f}")
+                    if task.estimated_hours > 0:
+                        progress = task.get_progress_percentage()
+                        print(f"   Progress: {progress:.1f}%")
+                    print("-" * 40)
+            else:
                 print("\nNo timers are currently running.")
-                print("Returning to main menu...")
-                break
+                print("Use the Interactive Menu to start timers.")
+            
+            # Update every second
+            time.sleep(1)
+            
+    except KeyboardInterrupt:
+        print("\n\nReturning to main menu...")
+        time.sleep(1)
+
+
+def interactive_menu_mode(task_manager: TaskManager) -> None:
+    """Interactive menu mode with timer controls."""
+    while True:
+        # Clear screen (works on most terminals)
+        os.system('clear' if os.name == 'posix' else 'cls')
+        
+        print("="*60)
+        print("LIVE TIMER DISPLAY - INTERACTIVE MENU")
+        print("="*60)
+        print(f"Current Time: {datetime.now().strftime('%H:%M:%S')}")
+        print("="*60)
+        
+        # Check for running timers
+        running_timers = task_manager.get_running_timers()
+        
+        if running_timers:
+            print(f"\nRUNNING TIMERS ({len(running_timers)} active):")
+            print("-" * 40)
             
             for i, task in enumerate(running_timers, 1):
                 current_time = task.get_current_session_time()
@@ -988,13 +1059,165 @@ def live_timer_display(task_manager: TaskManager) -> None:
                     progress = task.get_progress_percentage()
                     print(f"   Progress: {progress:.1f}%")
                 print("-" * 40)
+        else:
+            print("\nNo timers are currently running.")
+        
+        # Display menu options
+        print("\n" + "="*40)
+        print("TIMER CONTROLS")
+        print("="*40)
+        print("1. Start Timer")
+        print("2. Stop Timer")
+        print("3. Restart Timer")
+        print("4. Live Display Mode")
+        print("5. Return to Main Menu")
+        print("="*40)
+        
+        try:
+            choice = input("\nEnter your choice (1-5): ").strip()
             
-            # Update every second
-            time.sleep(1)
+            if choice == '1':
+                start_timer_from_live_display(task_manager)
+            elif choice == '2':
+                stop_timer_from_live_display(task_manager)
+            elif choice == '3':
+                restart_timer_from_live_display(task_manager)
+            elif choice == '4':
+                live_display_mode(task_manager)
+                break
+            elif choice == '5':
+                print("\nReturning to main menu...")
+                break
+            else:
+                print("\nInvalid choice. Please try again.")
+                input("Press Enter to continue...")
+                
+        except KeyboardInterrupt:
+            print("\n\nReturning to main menu...")
+            break
+        except EOFError:
+            print("\n\nReturning to main menu...")
+            break
+
+
+def start_timer_from_live_display(task_manager: TaskManager) -> None:
+    """Start a timer from the live display menu."""
+    if not task_manager.tasks:
+        print("\nNo tasks found.")
+        input("Press Enter to continue...")
+        return
+    
+    # Check if any timers are already running
+    running_timers = task_manager.get_running_timers()
+    if running_timers:
+        print(f"\nWarning: {len(running_timers)} timer(s) are already running:")
+        for task in running_timers:
+            print(f"  - {task.title}")
+        choice = input("\nDo you want to stop all running timers and start a new one? (y/N): ").strip().lower()
+        if choice == 'y':
+            task_manager.stop_all_timers()
+        else:
+            input("Press Enter to continue...")
+            return
+    
+    print("\nAvailable tasks:")
+    for i, task in enumerate(task_manager.tasks, 1):
+        status_indicator = " [TIMER RUNNING]" if task.timer_running else ""
+        print(f"{i}. [{task.id}] {task.title}{status_indicator}")
+    
+    try:
+        task_index = int(input("\nEnter task number: ")) - 1
+        if 0 <= task_index < len(task_manager.tasks):
+            task = task_manager.tasks[task_index]
+            if task.start_timer():
+                task_manager.save_tasks()
+                print(f"\nTimer started for '{task.title}' at {datetime.now().strftime('%H:%M:%S')}")
+            else:
+                print(f"Timer is already running for '{task.title}'")
+        else:
+            print("Invalid task number.")
+    except ValueError:
+        print("Invalid input. Please enter a number.")
+    
+    input("Press Enter to continue...")
+
+
+def stop_timer_from_live_display(task_manager: TaskManager) -> None:
+    """Stop a timer from the live display menu."""
+    running_timers = task_manager.get_running_timers()
+    if not running_timers:
+        print("\nNo timers are currently running.")
+        input("Press Enter to continue...")
+        return
+    
+    print("\nRunning timers:")
+    for i, task in enumerate(running_timers, 1):
+        current_time = task.get_current_session_time()
+        current_time_str = task.format_time(current_time)
+        print(f"{i}. [{task.id}] {task.title} - {current_time_str}")
+    
+    try:
+        timer_index = int(input("\nEnter timer number to stop: ")) - 1
+        if 0 <= timer_index < len(running_timers):
+            task = running_timers[timer_index]
+            elapsed = task.stop_timer()
+            task_manager.save_tasks()
+            elapsed_str = task.format_time(elapsed)
+            total_str = task.format_time(task.actual_hours)
+            print(f"\nTimer stopped for '{task.title}'")
+            print(f"Session time: {elapsed_str}")
+            print(f"Total time: {total_str}")
+        else:
+            print("Invalid timer number.")
+    except ValueError:
+        print("Invalid input. Please enter a number.")
+    
+    input("Press Enter to continue...")
+
+
+def restart_timer_from_live_display(task_manager: TaskManager) -> None:
+    """Restart a timer from the live display menu."""
+    if not task_manager.tasks:
+        print("\nNo tasks found.")
+        input("Press Enter to continue...")
+        return
+    
+    print("\nAvailable tasks:")
+    for i, task in enumerate(task_manager.tasks, 1):
+        status_indicator = " [TIMER RUNNING]" if task.timer_running else ""
+        total_time_str = task.format_time(task.get_total_time())
+        print(f"{i}. [{task.id}] {task.title}{status_indicator} - Total: {total_time_str}")
+    
+    try:
+        task_index = int(input("\nEnter task number to restart timer: ")) - 1
+        if 0 <= task_index < len(task_manager.tasks):
+            task = task_manager.tasks[task_index]
             
-    except KeyboardInterrupt:
-        print("\n\nReturning to main menu...")
-        time.sleep(1)
+            # Stop any running timer first
+            if task.timer_running:
+                elapsed = task.stop_timer()
+                elapsed_str = task.format_time(elapsed)
+                print(f"Stopped previous timer: {elapsed_str}")
+            
+            # Reset timer data to zero
+            task.session_time = 0.0
+            task.actual_hours = 0.0
+            task.timer_start_time = None
+            task.timer_running = False
+            
+            # Start new timer
+            task.start_timer()
+            task_manager.save_tasks()
+            
+            print(f"\nTimer restarted for '{task.title}'")
+            print("Previous time reset to zero")
+            print(f"New timer started at {datetime.now().strftime('%H:%M:%S')}")
+        else:
+            print("Invalid task number.")
+    except ValueError:
+        print("Invalid input. Please enter a number.")
+    
+    input("Press Enter to continue...")
 
 
 if __name__ == "__main__":
